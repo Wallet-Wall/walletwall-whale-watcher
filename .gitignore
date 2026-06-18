@@ -3,7 +3,12 @@ dist/
 .env
 .env.local
 .env.*.local
+.env.txt
 *.pid
 .DS_Store
 coverage/
 .vercel/
+walletwall-*.json
+*service-account*.json
+*.pem
+*.key
