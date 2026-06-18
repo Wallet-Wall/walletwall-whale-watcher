@@ -1561,7 +1561,7 @@ export default function WhaleWatcher({ node, walletData, dune12wData, dune12wLoa
 
       <MovementsGrid metrics={metrics} subFg={subFg} />
 
-      <WalletHoldingsStrip address={walletApiAddress} />
+      <WalletHoldingsStrip address={walletApiAddress} showComposition />
 
       <ProtocolAffinityBar address={walletApiAddress} fallbackProtocols={protocolAffinityFallback} />
 

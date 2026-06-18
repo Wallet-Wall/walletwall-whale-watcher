@@ -105,7 +105,64 @@ function renderChips(state, holdings) {
   );
 }
 
-export default function WalletHoldingsStrip({ address }) {
+const DONUT_COLORS = ['#BF4E32', '#2F6F62', '#C9A47A', '#8B6D3E', '#5A3E26', 'rgba(30,26,20,0.22)'];
+
+// Hand-rolled SVG composition donut (no chart dependency, matches the
+// warm-paper aesthetic). Top 5 priced holdings + an aggregated "Other" slice.
+function HoldingsDonut({ holdings, totalUsd }) {
+  const top = holdings.slice(0, 5).map(h => ({
+    label: h.tokenSymbol || '—',
+    value: Number.isFinite(h.balanceUsd) ? h.balanceUsd : 0,
+  }));
+  const restUsd = holdings.slice(5).reduce((s, h) => s + (Number.isFinite(h.balanceUsd) ? h.balanceUsd : 0), 0);
+  const segs = restUsd > 0 ? [...top, { label: 'Other', value: restUsd }] : top;
+  const total = segs.reduce((s, x) => s + x.value, 0) || 1;
+
+  const r = 42;
+  const C = 2 * Math.PI * r;
+  let offset = 0;
+  const arcs = segs.map((s, i) => {
+    const frac = s.value / total;
+    const dash = frac * C;
+    const arc = { ...s, frac, dash, offset, color: DONUT_COLORS[i % DONUT_COLORS.length] };
+    offset += dash;
+    return arc;
+  });
+
+  return (
+    <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+      <svg width={118} height={118} viewBox="0 0 120 120" role="img" aria-label="Holdings composition by value" style={{ flexShrink: 0 }}>
+        <g transform="rotate(-90 60 60)">
+          {arcs.map(a => (
+            <circle key={a.label} cx={60} cy={60} r={r} fill="none"
+              stroke={a.color} strokeWidth={15}
+              strokeDasharray={`${a.dash} ${C - a.dash}`} strokeDashoffset={-a.offset} />
+          ))}
+        </g>
+        <text x={60} y={57} textAnchor="middle" style={{ fontSize: 15, fontWeight: 700, fill: INK(0.84), fontFamily: 'var(--font-display)' }}>{fmtUSD(totalUsd)}</text>
+        <text x={60} y={70} textAnchor="middle" style={{ fontSize: 8, letterSpacing: 1, fill: INK(0.4) }}>priced</text>
+      </svg>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 120, flex: 1 }}>
+        {arcs.map(a => (
+          <div key={a.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+            <span style={{ width: 9, height: 9, borderRadius: 2, background: a.color, flexShrink: 0 }} />
+            <span style={{ fontWeight: 700, color: INK(0.78), minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.label}</span>
+            <span style={{ marginLeft: 'auto', color: INK(0.5), whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+              {(a.frac * 100).toFixed(a.frac < 0.1 ? 1 : 0)}% · {fmtUSD(a.value)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+HoldingsDonut.propTypes = {
+  holdings: PropTypes.array.isRequired,
+  totalUsd: PropTypes.number,
+};
+
+export default function WalletHoldingsStrip({ address, showComposition = false }) {
   const [state, setState] = useState('idle');   // idle | loading | done | error
   const [holdings, setHoldings] = useState([]);
   const [meta, setMeta]         = useState(null);
@@ -175,6 +232,11 @@ export default function WalletHoldingsStrip({ address }) {
         )}
       </div>
 
+      {/* Composition donut — Deep Dive only (showComposition); balance mode with ≥2 priced holdings */}
+      {showComposition && pricedHoldingsUsd > 0 && holdings.length >= 2 && (
+        <HoldingsDonut holdings={holdings} totalUsd={pricedHoldingsUsd} />
+      )}
+
       {/* Token chips row */}
       <div style={{
         display: 'flex', gap: 8, overflowX: 'auto',
@@ -196,4 +258,5 @@ export default function WalletHoldingsStrip({ address }) {
 
 WalletHoldingsStrip.propTypes = {
   address: PropTypes.string,
+  showComposition: PropTypes.bool,
 };
