@@ -266,10 +266,13 @@ MetricCard.propTypes = {
   hint: PropTypes.string,
 };
 
-function RowList({ title, rows, empty, renderRow }) {
+function RowList({ title, note, rows, empty, renderRow, footer }) {
   return (
     <section className="ww-card ww-card-sharp" style={{ padding: 18, minHeight: 0 }}>
-      <div className="ww-label" style={{ marginBottom: 12 }}>{title}</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, marginBottom: 12 }}>
+        <div className="ww-label">{title}</div>
+        {note && <div style={{ fontSize: 10, color: INK(0.38), fontStyle: 'italic' }}>{note}</div>}
+      </div>
       {rows.length > 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {rows.map(renderRow)}
@@ -277,15 +280,22 @@ function RowList({ title, rows, empty, renderRow }) {
       ) : (
         <div className="ww-empty-panel" style={{ padding: 14, color: INK(0.48), fontSize: 13 }}>{empty}</div>
       )}
+      {footer && (
+        <div style={{ marginTop: 12, paddingTop: 11, borderTop: '1px solid rgba(30,26,20,0.07)', fontSize: 11, color: INK(0.42), lineHeight: 1.45 }}>
+          {footer}
+        </div>
+      )}
     </section>
   );
 }
 
 RowList.propTypes = {
   title: PropTypes.string.isRequired,
+  note: PropTypes.string,
   rows: PropTypes.array.isRequired,
   empty: PropTypes.string.isRequired,
   renderRow: PropTypes.func.isRequired,
+  footer: PropTypes.node,
 };
 
 export default function WalletProfilePanel({ address, onDeepDive }) {
@@ -439,9 +449,11 @@ export default function WalletProfilePanel({ address, onDeepDive }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 18 }}>
         <RowList
-          title="Top tokens by value"
+          title="Top tokens by transfer volume"
+          note="Flow, not holdings"
+          footer="Cumulative notional moved through this wallet across the sampled transfers — throughput, not current value. See the Holdings card above for priced holdings."
           rows={topTokens}
-          empty="No token balance data available for this wallet."
+          empty="No token transfer data available for this wallet."
           renderRow={(row) => (
             <div key={row.tokenAddress || row.tokenSymbol} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13 }}>
               <span style={{ fontWeight: 700 }}>{row.tokenSymbol}</span>
