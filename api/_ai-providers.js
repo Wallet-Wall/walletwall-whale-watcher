@@ -1,5 +1,3 @@
-import { recordProviderCall } from './_provider-telemetry.js';
-
 const OPENROUTER_BASE   = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENAI_BASE       = 'https://api.openai.com/v1/chat/completions';
 const ANTHROPIC_BASE    = 'https://api.anthropic.com/v1/messages';
@@ -7,11 +5,6 @@ const ANTHROPIC_VERSION = '2023-06-01';
 const ANTHROPIC_MODEL   = 'claude-sonnet-4-20250514';
 
 async function _fetchProvider(url, headers, body, parseText, signal, tag, name) {
-  // Each AI provider call spends tokens (real money). Record it under a per-provider
-  // telemetry namespace (ai-openrouter / ai-openai / ai-anthropic) so an AI spend
-  // spike is visible in /api/provider-usage — the same guardrail Dune already has.
-  const provider = `ai-${name.toLowerCase()}`;
-  const startedAt = Date.now();
   try {
     const r = await fetch(url, {
       method:  'POST',
@@ -19,11 +12,9 @@ async function _fetchProvider(url, headers, body, parseText, signal, tag, name) 
       body:    JSON.stringify(body),
       ...(signal && { signal }),
     });
-    recordProviderCall(provider, { ms: Date.now() - startedAt, ok: r.ok, status: r.status });
     if (r.ok) return parseText(await r.json()) ?? null;
     console.warn(`[${tag}] ${name}`, r.status);
   } catch (e) {
-    recordProviderCall(provider, { ms: Date.now() - startedAt, ok: false });
     console.warn(`[${tag}] ${name} error:`, e.message);
   }
   return null;

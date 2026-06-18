@@ -16,7 +16,6 @@ import { Suspense, lazy, useState, useCallback } from 'react';
 import ReactDOM from 'react-dom/client';
 import { Analytics } from '@vercel/analytics/react';
 import './index.css';
-import { COLORS } from './theme.js';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import WhaleWatcherEntryPage from './components/WhaleWatcherEntryPage.jsx';
 import WhaleWatcherSkeleton from './components/WhaleWatcherSkeleton.jsx';
@@ -39,7 +38,7 @@ function App() {
   }, []);
 
   return (
-    <div style={{ minHeight: '100vh', height: '100dvh', background: COLORS.brand.cream, color: COLORS.brand.ink }}>
+    <div style={{ minHeight: '100vh', height: '100dvh', background: '#FAF8F3', color: 'rgba(30,26,20,0.88)' }}>
       <Analytics />
       <WhaleWatcherEntryPage
         walletData={walletData}

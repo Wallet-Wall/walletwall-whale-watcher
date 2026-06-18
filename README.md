@@ -41,8 +41,6 @@ This starts:
 
 The app falls back to demo wallet data when provider keys are not configured, so the UI is fully explorable with only `SESSION_SECRET` set.
 
-**Try it out:** enter `vitalik.eth` or `0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045` in the search box to see a fully-populated wallet view with live data.
-
 **Windows PowerShell:** use `npm.cmd` if `npm.ps1` is blocked by execution policy.
 
 ## Environment Variables

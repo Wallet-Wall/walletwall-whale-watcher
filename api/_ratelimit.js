@@ -175,11 +175,6 @@ export function sendRateLimitResponse(res, allowance) {
   return null;
 }
 
-export function sendMethodNotAllowed(res, allowed) {
-  res.setHeader('Allow', allowed);
-  return res.status(405).json({ error: 'Method Not Allowed' });
-}
-
 export async function takeRequestAllowance(bucket, ip, { limit, windowSeconds = 3600, durableRequired = false } = {}) {
   const safeBucket = String(bucket || 'api').replace(/[^a-z0-9-]/gi, '_').slice(0, 80);
   const safeLimit = Math.max(1, Number(limit) || 1);
