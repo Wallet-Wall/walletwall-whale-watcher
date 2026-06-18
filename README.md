@@ -21,7 +21,17 @@ Whale Watcher is part of the [WalletWall](https://walletwall.org) suite, hosted 
 ```bash
 npm install
 cp .env.example .env
-# Fill in your keys — see .env.example for what each key does
+```
+
+Open `.env` and set at least `SESSION_SECRET` to a random 32-character string. Generate one with:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Then start the dev servers:
+
+```bash
 npm run dev
 ```
 
@@ -29,7 +39,7 @@ This starts:
 - Vite dev server on `http://localhost:3000`
 - API shim on `http://localhost:3001`
 
-The app falls back to demo wallet data when provider keys are not configured.
+The app falls back to demo wallet data when provider keys are not configured, so the UI is fully explorable with only `SESSION_SECRET` set.
 
 **Windows PowerShell:** use `npm.cmd` if `npm.ps1` is blocked by execution policy.
 
@@ -39,14 +49,19 @@ See [`.env.example`](.env.example) for the full list with inline documentation.
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `SESSION_SECRET` | Yes | Signs session JWTs — use 32+ random characters |
-| `DUNE_API_KEY` | Yes | 12-week wallet activity feed |
-| `DUNE_QUERY_12WK_ACTIVE_WALLETS` | Yes | Numeric Dune query ID |
-| `UPSTASH_REDIS_REST_URL` | Recommended | Durable rate limiting |
-| `UPSTASH_REDIS_REST_TOKEN` | Recommended | Durable rate limiting |
-| `ETHERSCAN_API_KEY` | Recommended | Live wallet data |
-| `ALCHEMY_API_KEY` | Recommended | Live wallet data |
-| `OPENROUTER_API_KEY` | Optional | AI narrative |
+| `SESSION_SECRET` | Local: recommended · Prod: required | Signs session JWTs — use 32+ random characters. Falls back to an ephemeral key in local dev only. |
+| `DUNE_API_KEY` | Recommended | 12-week wallet activity feed. Falls back to demo data. |
+| `DUNE_QUERY_12WK_ACTIVE_WALLETS` | Recommended | Numeric Dune query ID for the 12-week activity feed. |
+| `UPSTASH_REDIS_REST_URL` | Recommended | Durable rate limiting across restarts |
+| `UPSTASH_REDIS_REST_TOKEN` | Recommended | Durable rate limiting across restarts |
+| `ETHERSCAN_API_KEY` | Recommended | Live wallet transactions and balances |
+| `ALCHEMY_API_KEY` | Recommended | Live wallet data and ENS resolution |
+| `COINGECKO_API_KEY` | Optional | Token price data — unauthenticated CoinGecko used as fallback |
+| `GRAPH_API_KEY` | Optional | The Graph gateway key for Uniswap V3 / Aave V3 subgraph enrichment |
+| `GCP_SERVICE_ACCOUNT_JSON` | Optional | Service account JSON for BigQuery wallet activity (primary source for `/api/wallet-activity` when set) |
+| `OPENROUTER_API_KEY` | Optional | AI narrative (first available provider wins) |
+| `OPENAI_API_KEY` | Optional | AI narrative fallback |
+| `ANTHROPIC_API_KEY` | Optional | AI narrative fallback |
 
 ### Dune Query Schema
 
