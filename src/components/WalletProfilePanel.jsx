@@ -267,8 +267,15 @@ ProportionRow.propTypes = {
   tone: PropTypes.oneOf(['in', 'out', 'neutral']),
 };
 
+// Only build a link for a well-formed 0x address. Validating against a fixed
+// hex charset both avoids dead links for non-address values (ENS, protocol
+// names) and prevents any untrusted value from reaching the anchor href —
+// e.g. a `javascript:` URI (CodeQL js/xss-through-dom).
 function etherscanAddress(address) {
-  return address ? `https://etherscan.io/address/${address}` : undefined;
+  const addr = String(address ?? '').trim();
+  return /^0x[0-9a-fA-F]{40}$/.test(addr)
+    ? `https://etherscan.io/address/${addr}`
+    : undefined;
 }
 
 // Two-column inflow/outflow ledger — replaces the previous SVG sankey, which
