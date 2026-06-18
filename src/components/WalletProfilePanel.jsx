@@ -6,6 +6,7 @@ import { fmtAddress, fmtTx, fmtUSD } from '../lib/holder-wall-formatting.js';
 import { deriveAdversarialSignals } from '../lib/adversarial-heuristics.js';
 import { walletDataToBaseline, walletDataToLiveEvents } from '../data/adapters/walletDataAdapter.js';
 import WalletHoldingsStrip from './WalletHoldingsStrip.jsx';
+import ActivityHeatmap from './ActivityHeatmap.jsx';
 import { useWatchlist } from '../hooks/useWatchlist.js';
 
 const INK = (a) => `rgba(30,26,20,${a})`;
@@ -145,6 +146,22 @@ function buildTransferFlowModel(walletData, limit = MAX_FLOW_EVENTS) {
   }, { inUsd: 0, outUsd: 0, inCount: 0, outCount: 0 });
 
   return { events, counterparties, totals };
+}
+
+// Daily transaction-count timeline for the activity heatmap. Counts are
+// reliable even where per-transfer USD is missing, so the cadence stays
+// honest — it reflects the sampled transfers, not the wallet's full history.
+function buildActivityTimeline(walletData) {
+  const txs = Array.isArray(walletData?.transactions) ? walletData.transactions : [];
+  if (txs.length === 0) return [];
+  const byDay = new Map();
+  for (const tx of txs) {
+    const ms = toTxDateValue(tx.timeStamp);
+    if (!ms) continue;
+    const date = new Date(ms).toISOString().slice(0, 10);
+    byDay.set(date, (byDay.get(date) || 0) + 1);
+  }
+  return [...byDay.entries()].map(([date, txCount]) => ({ date, txCount }));
 }
 
 // Structural / activity descriptors and elevated risk signals are presented
@@ -449,6 +466,7 @@ export default function WalletProfilePanel({ address, onDeepDive }) {
   const baseline = useMemo(() => walletDataToBaseline(walletData), [walletData]);
   const liveEvents = useMemo(() => walletDataToLiveEvents(walletData).slice(0, 20), [walletData]);
   const transferFlowModel = useMemo(() => buildTransferFlowModel(walletData), [walletData]);
+  const activityTimeline = useMemo(() => buildActivityTimeline(walletData), [walletData]);
   const profileNode = useMemo(() => buildProfileNode(normalizedAddress, walletData), [normalizedAddress, walletData]);
   const adversarialSignals = useMemo(
     () => deriveAdversarialSignals(profileNode, walletData, null),
@@ -583,6 +601,15 @@ export default function WalletProfilePanel({ address, onDeepDive }) {
       </section>
 
       <WalletHoldingsStrip address={normalizedAddress} />
+
+      {activityTimeline.length > 0 && (
+        <section className="ww-card ww-card-sharp" style={{ padding: 18 }}>
+          <ActivityHeatmap timeline={activityTimeline} />
+          <div style={{ marginTop: 10, fontSize: 11, color: INK(0.4), lineHeight: 1.45 }}>
+            Transaction cadence from the {walletData.transactions?.length || 0} sampled transfers — not full history.
+          </div>
+        </section>
+      )}
 
       <TransferFlowLedger model={transferFlowModel} />
 
