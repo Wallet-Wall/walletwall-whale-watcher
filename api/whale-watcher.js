@@ -39,7 +39,7 @@
 
 import { readOrCache } from './_dune.js';
 import { logDuneRouteDiagnostic, sanitizeDiagnosticMessage } from './_dune-diagnostics.js';
-import { getClientIp, takeRequestAllowance } from './_ratelimit.js';
+import { getClientIp, takeRequestAllowance, sendMethodNotAllowed } from './_ratelimit.js';
 
 const CACHE_TTL       = 3600;  // 1 h — Dune schedule runs every 4 h
 const STALE_WINDOW_H  = 8;     // warn when data is older than 8 h (2× schedule)
@@ -127,7 +127,7 @@ export function normalizeRows(rows) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET') return res.status(405).end();
+  if (req.method !== 'GET') return sendMethodNotAllowed(res, 'GET');
 
   const ip        = getClientIp(req);
   const allowance = await takeRequestAllowance('whale-watcher', ip, { limit: 120, windowSeconds: 3600 });
