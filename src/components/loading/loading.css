@@ -1,0 +1,217 @@
+/* ===================================================
+   WalletWall Loading System — loading.css
+   Signal sweep, skeleton shapes, variant shells
+   =================================================== */
+
+/* --- Keyframes (do not duplicate index.css keyframes) --- */
+
+@keyframes ww-signal-sweep-move {
+  0%   { transform: translateX(-100%); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateX(550%); opacity: 0; }
+}
+
+@keyframes ww-btn-sweep-move {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
+/* --- Reduced motion: freeze all loading animations --- */
+@media (prefers-reduced-motion: reduce) {
+  .ww-signal-sweep,
+  .ww-btn-sweep,
+  .ww-skeleton-line,
+  .ww-skeleton-pill,
+  .ww-skeleton-circle,
+  .ww-signal-quantum-bar-segment {
+    animation: none !important;
+    opacity: 0.55;
+  }
+}
+
+/* --- Skeleton shape extensions (complement .ww-skeleton-block in index.css) --- */
+/* All share the same shimmer as .ww-skeleton-block */
+
+.ww-skeleton-line {
+  animation: ww-skeleton-pulse 1.4s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    rgba(30, 26, 20, 0.05),
+    rgba(191, 78, 50, 0.10),
+    rgba(30, 26, 20, 0.05)
+  );
+  background-size: 220% 100%;
+  border-radius: 3px;
+  display: block;
+  height: 11px;
+}
+
+.ww-skeleton-pill {
+  animation: ww-skeleton-pulse 1.4s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    rgba(30, 26, 20, 0.05),
+    rgba(191, 78, 50, 0.10),
+    rgba(30, 26, 20, 0.05)
+  );
+  background-size: 220% 100%;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.ww-skeleton-circle {
+  animation: ww-skeleton-pulse 1.4s ease-in-out infinite;
+  background: linear-gradient(
+    135deg,
+    rgba(30, 26, 20, 0.05),
+    rgba(191, 78, 50, 0.10),
+    rgba(30, 26, 20, 0.05)
+  );
+  background-size: 220% 100%;
+  border-radius: 50%;
+  display: block;
+}
+
+/* --- Thin terracotta signal sweep --- */
+.ww-signal-sweep {
+  animation: ww-signal-sweep-move 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(191, 78, 50, 0.45) 50%,
+    transparent 100%
+  );
+  height: 1.5px;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  width: 18%;
+  will-change: transform;
+}
+
+/* --- Button loading variant --- */
+.ww-btn-loading {
+  overflow: hidden;
+  position: relative;
+}
+
+.ww-btn-sweep {
+  animation: ww-btn-sweep-move 1.6s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.10) 50%,
+    transparent 100%
+  );
+  bottom: 0;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  width: 55%;
+  will-change: transform;
+}
+
+/* --- SignalLoader shared shell --- */
+.ww-signal-loader {
+  font-family: var(--font-ui, "Manrope", system-ui, sans-serif);
+  position: relative;
+}
+
+/* Full-page variant shells */
+.ww-signal-loader--page,
+.ww-signal-loader--market,
+.ww-signal-loader--quantum,
+.ww-signal-loader--whale,
+.ww-signal-loader--graph {
+  min-height: 100vh;
+}
+
+.ww-signal-loader--page {
+  background: linear-gradient(180deg, #FFFDF8 0%, #FAF8F3 100%);
+}
+
+.ww-signal-loader--graph,
+.ww-signal-loader--market,
+.ww-signal-loader--quantum,
+.ww-signal-loader--whale {
+  background: #FAF8F3;
+}
+
+/* Compact + inline modifiers */
+.ww-signal-loader--compact,
+.ww-signal-loader--compact.ww-signal-loader--page,
+.ww-signal-loader--compact.ww-signal-loader--market,
+.ww-signal-loader--compact.ww-signal-loader--quantum,
+.ww-signal-loader--compact.ww-signal-loader--whale,
+.ww-signal-loader--compact.ww-signal-loader--graph {
+  min-height: unset;
+}
+
+.ww-signal-loader--inline {
+  display: inline-block;
+  min-height: unset;
+}
+
+/* --- Loading text labels (revealed after delay via DelayedLoader) --- */
+.ww-delayed-label {
+  animation: fadein 0.3s ease-out;
+  color: rgba(30, 26, 20, 0.38);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.ww-delayed-hint {
+  animation: fadein 0.3s ease-out;
+  color: rgba(30, 26, 20, 0.28);
+  font-size: 11px;
+  letter-spacing: 0.1px;
+  margin-top: 3px;
+}
+
+/* --- Market variant card skeletons --- */
+.ww-signal-market-card {
+  background: rgba(255, 252, 246, 0.82);
+  border: 1px solid rgba(139, 49, 32, 0.09);
+  border-radius: 6px;
+  overflow: hidden;
+  padding: 14px 16px;
+  position: relative;
+}
+
+/* --- Quantum variant bar segment --- */
+.ww-signal-quantum-bar-seg {
+  animation: ww-skeleton-pulse 1.4s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    rgba(30, 26, 20, 0.05),
+    rgba(191, 78, 50, 0.10),
+    rgba(30, 26, 20, 0.05)
+  );
+  background-size: 220% 100%;
+  border-radius: 2px;
+  flex: 1;
+  height: 10px;
+}
+
+/* Ghost graph nodes for graph/whale variants */
+.ww-signal-ghost-node {
+  border: 1.5px solid rgba(191, 78, 50, 0.18);
+  border-radius: 50%;
+  position: absolute;
+}
+
+.ww-signal-ghost-node--center {
+  border-color: rgba(191, 78, 50, 0.30);
+}
+
+/* Whale path trace (terracotta, subtle) */
+.ww-signal-whale-trace {
+  stroke: rgba(191, 78, 50, 0.28);
+  stroke-dasharray: 3 5;
+  stroke-width: 1.5;
+}
