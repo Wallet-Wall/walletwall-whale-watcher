@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import PropTypes from 'prop-types';
 import Badge from './Badge.jsx';
 
@@ -5,6 +6,7 @@ const TAN = '201,164,122';
 const TAN_DARK = '139,109,62';
 
 export default function ActivityHeatmap({ timeline }) {
+  const [hoverKey, setHoverKey] = useState(null);
   const days = {};
   (timeline || []).forEach(d => { days[d.date] = d.txCount || 0; });
 
@@ -38,11 +40,13 @@ export default function ActivityHeatmap({ timeline }) {
               const intensity = count / maxTx;
               return (
                 <div key={date} title={`${date}: ${count} tx${count === 1 ? '' : 's'}`}
+                  onMouseEnter={() => setHoverKey(date)} onMouseLeave={() => setHoverKey(null)}
                   style={{
                     minHeight:70,
                     borderRadius:2,
                     background: count ? `rgba(${TAN},${0.12 + intensity * 0.82})` : 'rgba(30,26,20,0.06)',
-                    border:`1px solid rgba(${TAN_DARK},0.16)`,
+                    border:`1px solid rgba(${TAN_DARK},${hoverKey === date ? 0.55 : 0.16})`,
+                    transition:'border-color 0.12s ease',
                     boxShadow: count ? `inset 1px 1px 0 rgba(255,255,255,0.24), inset -1px -1px 0 rgba(${TAN_DARK},0.16)` : 'none',
                     display:'flex',
                     alignItems:'end',
@@ -91,9 +95,11 @@ export default function ActivityHeatmap({ timeline }) {
                 const intensity = count / maxTx;
                 return (
                   <div key={date} title={`${date}: ${count} tx${count === 1 ? '' : 's'}`}
+                    onMouseEnter={() => setHoverKey(date)} onMouseLeave={() => setHoverKey(null)}
                     style={{ width:'100%', paddingBottom:'100%', borderRadius:2,
                       background: count ? `rgba(${TAN},${0.08 + intensity * 0.85})` : `rgba(${TAN},0.04)`,
-                      border:`1px solid rgba(${TAN_DARK},${count ? '0.12' : '0.06'})` }} />
+                      border:`1px solid rgba(${TAN_DARK},${hoverKey === date ? 0.55 : (count ? 0.12 : 0.06)})`,
+                      transition:'border-color 0.12s ease' }} />
                 );
               })}
             </div>
