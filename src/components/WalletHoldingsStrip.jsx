@@ -139,6 +139,15 @@ export default function WalletHoldingsStrip({ address }) {
   const modeLabel = MODE_LABEL[mode] ?? 'Portfolio';
   const modeNote  = MODE_NOTE[mode] ?? '';
 
+  // Value anchor: sum of the priced holdings the portfolio dataset returned.
+  // Only meaningful in balance mode — trading mode reports traded notional
+  // (throughput), not value. Upstream normalization already drops null and
+  // zero-value rows, so this is strictly the priced subset, not a portfolio
+  // total; the copy stays "priced holdings" to avoid implying full coverage.
+  const pricedHoldingsUsd = mode === 'balance'
+    ? holdings.reduce((sum, h) => sum + (Number.isFinite(h.balanceUsd) ? h.balanceUsd : 0), 0)
+    : null;
+
   return (
     <div className="ww-card ww-card-sharp" style={{ padding: 16, overflow: 'hidden' }}>
       {/* Header */}
@@ -146,8 +155,18 @@ export default function WalletHoldingsStrip({ address }) {
         display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
         gap: 12, marginBottom: 12, flexWrap: 'wrap',
       }}>
-        <div style={{ fontSize: 9, letterSpacing: 2.2, color: P, fontWeight: 700, textTransform: 'uppercase' }}>
-          {modeLabel}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 9, letterSpacing: 2.2, color: P, fontWeight: 700, textTransform: 'uppercase' }}>
+            {modeLabel}
+          </span>
+          {pricedHoldingsUsd > 0 && (
+            <span style={{ fontSize: 14, fontWeight: 700, color: INK(0.82), fontFamily: 'var(--font-display)' }}>
+              {fmtUSD(pricedHoldingsUsd)}
+              <span style={{ fontSize: 10, fontWeight: 600, color: INK(0.4), marginLeft: 5, fontFamily: 'inherit' }}>
+                priced holdings · {holdings.length} token{holdings.length === 1 ? '' : 's'}
+              </span>
+            </span>
+          )}
         </div>
         {modeNote && (
           <div style={{ fontSize: 10, color: INK(0.36), fontStyle: 'italic' }}>
