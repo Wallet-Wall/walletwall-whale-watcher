@@ -10,7 +10,6 @@ import { useWatchlist } from '../hooks/useWatchlist.js';
 
 const INK = (a) => `rgba(30,26,20,${a})`;
 const P = '#BF4E32';
-const BG = '#FAF8F3';
 const INBOUND = '#2F6F62';
 const MAX_FLOW_EVENTS = 50;
 const MAX_FLOW_COUNTERPARTIES = 10;
@@ -22,6 +21,35 @@ function formatDate(value) {
     : new Date(value);
   if (!Number.isFinite(date.getTime())) return String(value);
   return date.toISOString().slice(0, 10);
+}
+
+// Relative-time label ("2 days ago"), falling back to the ISO date.
+function relativeTime(value) {
+  if (!value) return null;
+  const ms = /^\d+$/.test(String(value)) ? Number(value) * 1000 : Date.parse(value);
+  if (!Number.isFinite(ms)) return null;
+  const diff = Date.now() - ms;
+  if (diff < 0) return null;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(months / 12)}y ago`;
+}
+
+// Transfer/flow USD values are estimated and frequently sub-dollar or missing;
+// rendering a literal "$0" everywhere reads as broken, so degrade honestly.
+function fmtFlowUSD(value) {
+  if (value == null) return '—';
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return '—';
+  if (n < 1) return '<$1';
+  return fmtUSD(n);
 }
 
 function buildProfileNode(address, walletData) {
@@ -109,132 +137,225 @@ function buildTransferFlowModel(walletData, limit = MAX_FLOW_EVENTS) {
     .sort((a, b) => (b.totalUsd || b.totalCount) - (a.totalUsd || a.totalCount))
     .slice(0, MAX_FLOW_COUNTERPARTIES);
 
-  return { events, counterparties };
+  // Sample-level aggregates for the net-flow summary.
+  const totals = events.reduce((acc, e) => {
+    if (e.direction === 'in') { acc.inUsd += e.valueUSD; acc.inCount += 1; }
+    else { acc.outUsd += e.valueUSD; acc.outCount += 1; }
+    return acc;
+  }, { inUsd: 0, outUsd: 0, inCount: 0, outCount: 0 });
+
+  return { events, counterparties, totals };
 }
 
+// Structural / activity descriptors and elevated risk signals are presented
+// in separate groups so a long risk caveat never sits inline as a "pill".
 function behaviorLabels(walletData, baseline, adversarialSignals) {
-  const labels = [];
+  const structural = [];
+  const risk = [];
   const txCount = walletData?.txCount ?? 0;
   const cpCount = baseline?.uniqueCounterparties ?? 0;
 
-  if (txCount <= 5) labels.push({ label: 'Fresh wallet', tone: 'muted' });
-  if (txCount >= 75) labels.push({ label: 'High activity', tone: 'warn' });
-  if (cpCount >= 10) labels.push({ label: 'Broad counterparty set', tone: 'safe' });
-  if (walletData?.dataQuality?.isPartial) labels.push({ label: 'Sampled history', tone: 'warn' });
+  if (txCount <= 5) structural.push({ label: 'Fresh wallet', tone: 'muted' });
+  if (txCount >= 75) structural.push({ label: 'High activity', tone: 'warn' });
+  if (cpCount >= 10) structural.push({ label: 'Broad counterparty set', tone: 'safe' });
+  if (walletData?.dataQuality?.isPartial) structural.push({ label: 'Sampled history', tone: 'warn' });
 
   const elevated = Object.entries(adversarialSignals || {})
     .filter(([, s]) => (s?.score ?? 0) >= 0.5)
     .sort(([, a], [, b]) => (b?.score ?? 0) - (a?.score ?? 0))
-    .slice(0, 2);
+    .slice(0, 3);
 
   for (const [, signal] of elevated) {
-    labels.push({ label: signal.reason, tone: signal.score >= 0.75 ? 'risk' : 'warn' });
+    risk.push({ label: signal.reason, tone: signal.score >= 0.75 ? 'risk' : 'warn' });
   }
 
-  if (!labels.length) labels.push({ label: 'Low signal volume', tone: 'muted' });
-  return labels;
+  if (!structural.length) structural.push({ label: 'Low signal volume', tone: 'muted' });
+  return { structural, risk };
 }
 
-function FlowNodeLabel({ node }) {
-  const display = node.label || fmtAddress(node.address);
+// Deterministic 5×5 mirrored identicon derived from the address — gives every
+// wallet a recognisable visual fingerprint without an external dependency.
+function Identicon({ address, size = 52 }) {
+  const { cells, color } = useMemo(() => {
+    const seed = String(address || '0x0').toLowerCase();
+    let h = 2166136261;
+    for (let i = 0; i < seed.length; i += 1) {
+      h ^= seed.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    const hue = Math.abs(h) % 360;
+    const grid = [];
+    let r = h >>> 0;
+    for (let i = 0; i < 15; i += 1) {
+      r = (Math.imul(r, 1664525) + 1013904223) >>> 0;
+      grid.push((r & 0xff) > 132);
+    }
+    const out = [];
+    for (let row = 0; row < 5; row += 1) {
+      for (let col = 0; col < 5; col += 1) {
+        const mirrored = col < 3 ? col : 4 - col;
+        out.push(grid[row * 3 + mirrored]);
+      }
+    }
+    return { cells: out, color: `hsl(${hue}, 42%, 46%)` };
+  }, [address]);
+
+  const unit = size / 5;
   return (
-    <div>
-      <div style={{ fontSize: 12, fontWeight: 800, color: INK(0.86), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {display}
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      role="img"
+      aria-label="Wallet identicon"
+      style={{ borderRadius: 8, border: '1px solid rgba(30,26,20,0.10)', background: 'rgba(255,252,246,0.9)', flexShrink: 0 }}
+    >
+      {cells.map((on, i) => on && (
+        <rect
+          key={i}
+          x={(i % 5) * unit}
+          y={Math.floor(i / 5) * unit}
+          width={unit}
+          height={unit}
+          fill={color}
+        />
+      ))}
+    </svg>
+  );
+}
+
+Identicon.propTypes = { address: PropTypes.string, size: PropTypes.number };
+
+// A single counterparty row with a proportional inline bar.
+function ProportionRow({ label, href, value, meta, fraction, tone }) {
+  const accent = tone === 'in' ? INBOUND : tone === 'out' ? P : INK(0.4);
+  const Label = href ? 'a' : 'span';
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 10, alignItems: 'center' }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 4 }}>
+          <Label
+            href={href}
+            target={href ? '_blank' : undefined}
+            rel={href ? 'noreferrer' : undefined}
+            style={{
+              fontSize: 12.5, fontWeight: 700, color: INK(0.82),
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              textDecoration: 'none',
+            }}
+            title={label}
+          >
+            {label}
+          </Label>
+          <span style={{ fontSize: 12, color: INK(0.6), whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+        </div>
+        <div style={{ position: 'relative', height: 5, borderRadius: 3, background: 'rgba(30,26,20,0.06)', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', inset: 0, width: `${Math.max(3, Math.min(100, fraction * 100))}%`, background: accent, opacity: 0.62, borderRadius: 3 }} />
+        </div>
       </div>
-      <div style={{ fontSize: 10, color: INK(0.44), fontFamily: 'var(--font-mono)', marginTop: 2 }}>
-        {node.totalCount} txns - {fmtUSD(node.totalUsd)}
-      </div>
+      {meta && <span style={{ fontSize: 10.5, color: INK(0.4), whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)' }}>{meta}</span>}
     </div>
   );
 }
 
-FlowNodeLabel.propTypes = {
-  node: PropTypes.shape({ address: PropTypes.string, label: PropTypes.string, totalCount: PropTypes.number, totalUsd: PropTypes.number }),
+ProportionRow.propTypes = {
+  label: PropTypes.string,
+  href: PropTypes.string,
+  value: PropTypes.node,
+  meta: PropTypes.node,
+  fraction: PropTypes.number,
+  tone: PropTypes.oneOf(['in', 'out', 'neutral']),
 };
 
-function TransferFlowVisualizer({ model, walletLabel }) {
+// Only build a link for a well-formed 0x address. Validating against a fixed
+// hex charset both avoids dead links for non-address values (ENS, protocol
+// names) and prevents any untrusted value from reaching the anchor href —
+// e.g. a `javascript:` URI (CodeQL js/xss-through-dom).
+function etherscanAddress(address) {
+  const addr = String(address ?? '').trim();
+  return /^0x[0-9a-fA-F]{40}$/.test(addr)
+    ? `https://etherscan.io/address/${addr}`
+    : undefined;
+}
+
+// Two-column inflow/outflow ledger — replaces the previous SVG sankey, which
+// distorted badly (preserveAspectRatio="none" stretched strokes into wedges).
+function TransferFlowLedger({ model }) {
   const nodes = model.counterparties || [];
-  const inbound = nodes.filter(n => n.dominantDirection === 'in');
-  const outbound = nodes.filter(n => n.dominantDirection === 'out');
+  const totals = model.totals || { inUsd: 0, outUsd: 0, inCount: 0, outCount: 0 };
   const hasData = nodes.length > 0;
-  const xCenter = 50;
-  const yCenter = 50;
-  const sideY = (items, index) => items.length <= 1 ? yCenter : 18 + (index / (items.length - 1)) * 64;
-  const strokeWidth = (node) => Math.min(8, Math.max(2, Math.log10((node.totalUsd || node.totalCount || 1) + 10) * 1.45));
+  const usdMode = (totals.inUsd + totals.outUsd) > 0;
+
+  const inflows = nodes
+    .filter(n => n.inCount > 0)
+    .sort((a, b) => (usdMode ? b.inUsd - a.inUsd : b.inCount - a.inCount))
+    .slice(0, 6);
+  const outflows = nodes
+    .filter(n => n.outCount > 0)
+    .sort((a, b) => (usdMode ? b.outUsd - a.outUsd : b.outCount - a.outCount))
+    .slice(0, 6);
+
+  const maxIn = Math.max(1, ...inflows.map(n => (usdMode ? n.inUsd : n.inCount)));
+  const maxOut = Math.max(1, ...outflows.map(n => (usdMode ? n.outUsd : n.outCount)));
+
+  const netUsd = totals.inUsd - totals.outUsd;
+  const netLabel = usdMode
+    ? `${netUsd >= 0 ? '+' : '−'}${fmtFlowUSD(Math.abs(netUsd))}`
+    : `${totals.inCount} in · ${totals.outCount} out`;
+
+  const column = (title, rows, tone, total, totalCount, max) => (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+        <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, color: tone === 'in' ? INBOUND : P, textTransform: 'uppercase' }}>
+          {tone === 'in' ? '↘ Inflows' : '↗ Outflows'}
+        </span>
+        <span style={{ fontSize: 11, color: INK(0.46), fontVariantNumeric: 'tabular-nums' }}>
+          {usdMode ? fmtFlowUSD(total) : `${totalCount} txns`}
+        </span>
+      </div>
+      {rows.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {rows.map(node => (
+            <ProportionRow
+              key={`${tone}-${node.address}`}
+              label={node.label || fmtAddress(node.address)}
+              href={etherscanAddress(node.address)}
+              tone={tone}
+              value={usdMode ? fmtFlowUSD(tone === 'in' ? node.inUsd : node.outUsd) : `${tone === 'in' ? node.inCount : node.outCount} txns`}
+              meta={`${tone === 'in' ? node.inCount : node.outCount}×`}
+              fraction={(usdMode ? (tone === 'in' ? node.inUsd : node.outUsd) : (tone === 'in' ? node.inCount : node.outCount)) / max}
+            />
+          ))}
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: INK(0.4), padding: '10px 0' }}>No {tone === 'in' ? 'inbound' : 'outbound'} transfers in sample.</div>
+      )}
+    </div>
+  );
 
   return (
-    <section className="ww-card ww-card-sharp" style={{ padding: 18, overflow: 'hidden' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start', flexWrap: 'wrap', marginBottom: 12 }}>
+    <section className="ww-card ww-card-sharp" style={{ padding: 18 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start', flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
-          <div className="ww-label" style={{ marginBottom: 5 }}>Transfer Flow Visualizer</div>
+          <div className="ww-label" style={{ marginBottom: 5 }}>Transfer flow</div>
           <div style={{ fontSize: 12, color: INK(0.48), lineHeight: 1.45 }}>
-            Last {Math.min(model.events.length, MAX_FLOW_EVENTS)} loaded transfers from the wallet provider sample.
+            Net movement across the last {Math.min(model.events.length, MAX_FLOW_EVENTS)} loaded transfers.
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', color: INK(0.48), fontSize: 11, flexWrap: 'wrap' }}>
-          <span><span style={{ color: INBOUND, fontWeight: 900 }}>In</span> to this wallet</span>
-          <span><span style={{ color: P, fontWeight: 900 }}>Out</span> from this wallet</span>
-        </div>
+        {hasData && (
+          <div style={{ textAlign: 'right' }}>
+            <div className="ww-label" style={{ marginBottom: 4 }}>Net flow</div>
+            <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'var(--font-display)', color: usdMode ? (netUsd >= 0 ? INBOUND : P) : INK(0.78) }}>
+              {netLabel}
+            </div>
+          </div>
+        )}
       </div>
 
       {hasData ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(240px, 0.8fr)', gap: 16 }}>
-          <div style={{ minHeight: 260, position: 'relative', border: '1px solid rgba(191,78,50,0.14)', background: 'rgba(255,255,255,0.42)', overflow: 'hidden' }}>
-            <svg role="img" aria-label="Recent transfer flow graph" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-              <defs>
-                <marker id="wpp-flow-arrow-in" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                  <path d="M0,0 L6,3 L0,6 Z" fill={INBOUND} />
-                </marker>
-                <marker id="wpp-flow-arrow-out" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                  <path d="M0,0 L6,3 L0,6 Z" fill={P} />
-                </marker>
-              </defs>
-              {inbound.map((node, index) => {
-                const y = sideY(inbound, index);
-                return (
-                  <path key={`in-${node.address}`}
-                    d={`M18 ${y} C34 ${y}, 35 ${yCenter}, ${xCenter - 6} ${yCenter}`}
-                    fill="none" stroke={INBOUND} strokeOpacity="0.5"
-                    strokeWidth={strokeWidth(node)} markerEnd="url(#wpp-flow-arrow-in)" />
-                );
-              })}
-              {outbound.map((node, index) => {
-                const y = sideY(outbound, index);
-                return (
-                  <path key={`out-${node.address}`}
-                    d={`M${xCenter + 6} ${yCenter} C65 ${yCenter}, 66 ${y}, 82 ${y}`}
-                    fill="none" stroke={P} strokeOpacity="0.52"
-                    strokeWidth={strokeWidth(node)} markerEnd="url(#wpp-flow-arrow-out)" />
-                );
-              })}
-            </svg>
-            <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', width: 128, padding: '10px 12px', border: '1px solid rgba(191,78,50,0.32)', background: BG, boxShadow: '0 10px 26px rgba(30,26,20,0.08)' }}>
-              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.4, color: P, fontWeight: 800, marginBottom: 4 }}>This wallet</div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: INK(0.86), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{walletLabel}</div>
-            </div>
-            {inbound.map((node, index) => (
-              <div key={`in-label-${node.address}`} style={{ position: 'absolute', left: 14, top: `${sideY(inbound, index)}%`, transform: 'translateY(-50%)', width: 150, padding: '8px 10px', border: '1px solid rgba(47,111,98,0.2)', background: 'rgba(250,248,243,0.92)' }}>
-                <FlowNodeLabel node={node} />
-              </div>
-            ))}
-            {outbound.map((node, index) => (
-              <div key={`out-label-${node.address}`} style={{ position: 'absolute', right: 14, top: `${sideY(outbound, index)}%`, transform: 'translateY(-50%)', width: 150, padding: '8px 10px', border: '1px solid rgba(191,78,50,0.22)', background: 'rgba(250,248,243,0.92)' }}>
-                <FlowNodeLabel node={node} />
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
-            {model.events.slice(0, 8).map(event => (
-              <div key={event.txHash} style={{ display: 'grid', gridTemplateColumns: '42px minmax(0, 1fr) auto', gap: 8, alignItems: 'center', padding: '8px 10px', border: '1px solid rgba(30,26,20,0.08)', background: 'rgba(255,255,255,0.36)' }}>
-                <span style={{ color: event.direction === 'out' ? P : INBOUND, fontSize: 11, fontWeight: 900 }}>{event.direction === 'out' ? 'OUT' : 'IN'}</span>
-                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: INK(0.72) }}>
-                  {event.counterpartyLabel || fmtAddress(event.counterparty)}
-                </span>
-                <span style={{ fontSize: 11, color: INK(0.48), whiteSpace: 'nowrap' }}>{event.tokenSymbol} - {fmtUSD(event.valueUSD)}</span>
-              </div>
-            ))}
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 28 }}>
+          {column('Inflows', inflows, 'in', totals.inUsd, totals.inCount, maxIn)}
+          {column('Outflows', outflows, 'out', totals.outUsd, totals.outCount, maxOut)}
         </div>
       ) : (
         <div className="ww-empty-panel" style={{ padding: 14, color: INK(0.48), fontSize: 13 }}>
@@ -245,9 +366,8 @@ function TransferFlowVisualizer({ model, walletLabel }) {
   );
 }
 
-TransferFlowVisualizer.propTypes = {
-  model: PropTypes.shape({ events: PropTypes.array, counterparties: PropTypes.array }),
-  walletLabel: PropTypes.string,
+TransferFlowLedger.propTypes = {
+  model: PropTypes.shape({ events: PropTypes.array, counterparties: PropTypes.array, totals: PropTypes.object }),
 };
 
 function MetricCard({ label, value, hint }) {
@@ -266,22 +386,22 @@ MetricCard.propTypes = {
   hint: PropTypes.string,
 };
 
-function RowList({ title, note, rows, empty, renderRow, footer }) {
+function RankedList({ title, note, rows, empty, renderRow, footer }) {
   return (
     <section className="ww-card ww-card-sharp" style={{ padding: 18, minHeight: 0 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, marginBottom: 14 }}>
         <div className="ww-label">{title}</div>
         {note && <div style={{ fontSize: 10, color: INK(0.38), fontStyle: 'italic' }}>{note}</div>}
       </div>
       {rows.length > 0 ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
           {rows.map(renderRow)}
         </div>
       ) : (
         <div className="ww-empty-panel" style={{ padding: 14, color: INK(0.48), fontSize: 13 }}>{empty}</div>
       )}
       {footer && (
-        <div style={{ marginTop: 12, paddingTop: 11, borderTop: '1px solid rgba(30,26,20,0.07)', fontSize: 11, color: INK(0.42), lineHeight: 1.45 }}>
+        <div style={{ marginTop: 13, paddingTop: 11, borderTop: '1px solid rgba(30,26,20,0.07)', fontSize: 11, color: INK(0.42), lineHeight: 1.45 }}>
           {footer}
         </div>
       )}
@@ -289,7 +409,7 @@ function RowList({ title, note, rows, empty, renderRow, footer }) {
   );
 }
 
-RowList.propTypes = {
+RankedList.propTypes = {
   title: PropTypes.string.isRequired,
   note: PropTypes.string,
   rows: PropTypes.array.isRequired,
@@ -303,6 +423,7 @@ export default function WalletProfilePanel({ address, onDeepDive }) {
   const [walletData, setWalletData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [copied, setCopied] = useState(false);
   const { isWatched, toggle: toggleWatch } = useWatchlist();
 
   useEffect(() => {
@@ -333,7 +454,7 @@ export default function WalletProfilePanel({ address, onDeepDive }) {
     () => deriveAdversarialSignals(profileNode, walletData, null),
     [profileNode, walletData],
   );
-  const labels = useMemo(
+  const { structural, risk } = useMemo(
     () => behaviorLabels(walletData, baseline, adversarialSignals),
     [walletData, baseline, adversarialSignals],
   );
@@ -341,11 +462,22 @@ export default function WalletProfilePanel({ address, onDeepDive }) {
   const counterparties = useMemo(() => (baseline?.topCounterparties || []).slice(0, 8), [baseline]);
   const protocolRows = useMemo(() => (baseline?.protocolUsage || []).slice(0, 5), [baseline]);
 
+  const maxTokenVol = useMemo(() => Math.max(1, ...topTokens.map(t => t.volumeUSD || 0)), [topTokens]);
+  const maxCpVol = useMemo(() => Math.max(1, ...counterparties.map(c => c.volumeUSD || 0)), [counterparties]);
+
   const nativeBalanceValue = typeof walletData?.ethBalance === 'number'
-    ? `${walletData.ethBalance.toFixed(4)} ETH` : '-';
+    ? `${walletData.ethBalance.toLocaleString(undefined, { maximumFractionDigits: 4 })} ETH` : '—';
   const nativeBalanceHint = typeof walletData?.totalValueUSD === 'number'
     ? fmtUSD(walletData.totalValueUSD) : null;
+  const lastActiveRel = relativeTime(walletData?.lastActive);
   const watched = isWatched(normalizedAddress, { type: 'wallet', chain: 'ethereum' });
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard?.writeText(normalizedAddress).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    }).catch(() => {});
+  }, [normalizedAddress]);
 
   const handleDeepDive = useCallback(() => {
     onDeepDive?.(profileNode, walletData);
@@ -377,23 +509,44 @@ export default function WalletProfilePanel({ address, onDeepDive }) {
 
   if (!walletData) return null;
 
+  const walletName = walletData.ens || fmtAddress(normalizedAddress);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 14 }}>
-        <div style={{ minWidth: 0 }}>
-          <p className="ww-holder-page-kicker" style={{ margin: '0 0 4px' }}>Wallet profile</p>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(18px, 2.5vw, 28px)', lineHeight: 1.05, margin: 0, overflowWrap: 'anywhere' }}>
-            {walletData.ens || fmtAddress(normalizedAddress)}
-          </h2>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
-            <Badge variant="chain">Ethereum</Badge>
-            <span className="ww-mono" style={{ color: INK(0.46), fontSize: 12, overflowWrap: 'anywhere' }}>{normalizedAddress}</span>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
+        <div style={{ display: 'flex', gap: 14, minWidth: 0, alignItems: 'center' }}>
+          <Identicon address={normalizedAddress} />
+          <div style={{ minWidth: 0 }}>
+            <p className="ww-holder-page-kicker" style={{ margin: '0 0 4px' }}>Wallet profile</p>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(18px, 2.5vw, 28px)', lineHeight: 1.05, margin: 0, overflowWrap: 'anywhere' }}>
+              {walletName}
+            </h2>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
+              <Badge variant="chain">Ethereum</Badge>
+              <span className="ww-mono" style={{ color: INK(0.46), fontSize: 12, overflowWrap: 'anywhere' }}>{fmtAddress(normalizedAddress)}</span>
+              <button
+                type="button"
+                onClick={handleCopy}
+                title="Copy full address"
+                style={{ border: 'none', background: 'transparent', color: copied ? INBOUND : INK(0.42), cursor: 'pointer', fontSize: 11, fontWeight: 700, padding: 0, fontFamily: 'inherit' }}
+              >
+                {copied ? '✓ Copied' : '⧉ Copy'}
+              </button>
+              <a
+                href={etherscanAddress(normalizedAddress)}
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: INK(0.42), fontSize: 11, fontWeight: 700, textDecoration: 'none' }}
+              >
+                Etherscan ↗
+              </a>
+            </div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', flexShrink: 0 }}>
           <button
             type="button"
-            onClick={() => toggleWatch({ type: 'wallet', address: normalizedAddress, chain: 'ethereum', label: walletData.ens || fmtAddress(normalizedAddress) })}
+            onClick={() => toggleWatch({ type: 'wallet', address: normalizedAddress, chain: 'ethereum', label: walletName })}
             style={{
               padding: '9px 13px', fontSize: 12, fontWeight: 700, borderRadius: 6,
               border: `1px solid ${watched ? P : 'rgba(191,78,50,0.3)'}`,
@@ -415,19 +568,23 @@ export default function WalletProfilePanel({ address, onDeepDive }) {
         </div>
       </header>
 
-      <section style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
-        <MetricCard label="Native balance" value={nativeBalanceValue} hint={nativeBalanceHint} />
-        <MetricCard label="Transactions" value={fmtTx(walletData.txCount)} hint={walletData.transactionSample?.isSampled ? 'Recent sample loaded' : null} />
-        <MetricCard label="Counterparties" value={baseline.uniqueCounterparties ?? '-'} />
-        <MetricCard label="Last active" value={formatDate(walletData.lastActive)} />
+      {/* Hero balance + supporting stats */}
+      <section style={{ display: 'grid', gap: 12, gridTemplateColumns: 'minmax(220px, 1.3fr) repeat(auto-fit, minmax(150px, 1fr))' }}>
+        <div className="ww-metric-card" style={{ background: 'rgba(191,78,50,0.05)', borderColor: 'rgba(191,78,50,0.18)' }}>
+          <div className="ww-label" style={{ marginBottom: 6 }}>Native balance</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'clamp(20px, 2.4vw, 28px)', lineHeight: 1.05, color: INK(0.9) }}>
+            {nativeBalanceValue}
+          </div>
+          {nativeBalanceHint && <div style={{ color: P, fontSize: 13, fontWeight: 700, marginTop: 5 }}>{nativeBalanceHint}</div>}
+        </div>
+        <MetricCard label="Transactions" value={fmtTx(walletData.txCount)} hint={walletData.transactionSample?.isSampled ? 'Recent sample' : null} />
+        <MetricCard label="Counterparties" value={baseline.uniqueCounterparties ?? '—'} />
+        <MetricCard label="Last active" value={lastActiveRel || formatDate(walletData.lastActive)} hint={lastActiveRel ? formatDate(walletData.lastActive) : null} />
       </section>
 
       <WalletHoldingsStrip address={normalizedAddress} />
 
-      <TransferFlowVisualizer
-        model={transferFlowModel}
-        walletLabel={walletData.ens || fmtAddress(normalizedAddress)}
-      />
+      <TransferFlowLedger model={transferFlowModel} />
 
       <section className="ww-card ww-card-sharp" style={{ padding: 18 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
@@ -441,60 +598,85 @@ export default function WalletProfilePanel({ address, onDeepDive }) {
           />
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {labels.map((item) => (
+          {structural.map((item) => (
             <Badge key={item.label} variant="status" tone={item.tone}>{item.label}</Badge>
           ))}
         </div>
+        {risk.length > 0 && (
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(30,26,20,0.07)' }}>
+            <div className="ww-label" style={{ marginBottom: 8, color: 'rgba(139,49,32,0.7)' }}>Confidence caveats</div>
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {risk.map((item) => (
+                <li key={item.label} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 12, color: INK(0.62), lineHeight: 1.45 }}>
+                  <span style={{ color: item.tone === 'risk' ? P : '#8B6D3E', fontWeight: 900, flexShrink: 0 }}>•</span>
+                  <span>{item.label}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </section>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 18 }}>
-        <RowList
+        <RankedList
           title="Top tokens by transfer volume"
           note="Flow, not holdings"
           footer="Cumulative notional moved through this wallet across the sampled transfers — throughput, not current value. See the Holdings card above for priced holdings."
           rows={topTokens}
-          empty="No token transfer data available for this wallet."
+          empty="No token flow data available for this wallet."
           renderRow={(row) => (
-            <div key={row.tokenAddress || row.tokenSymbol} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13 }}>
-              <span style={{ fontWeight: 700 }}>{row.tokenSymbol}</span>
-              <span style={{ color: INK(0.58) }}>{fmtUSD(row.volumeUSD)} · {fmtTx(row.txCount)} txns</span>
-            </div>
+            <ProportionRow
+              key={row.tokenAddress || row.tokenSymbol}
+              label={row.tokenSymbol}
+              tone="neutral"
+              value={fmtUSD(row.volumeUSD)}
+              meta={`${fmtTx(row.txCount)}×`}
+              fraction={(row.volumeUSD || 0) / maxTokenVol}
+            />
           )}
         />
-        <RowList
+        <RankedList
           title="Top counterparties"
+          note="By transfer volume"
           rows={counterparties}
           empty="No counterparty data available for this wallet."
           renderRow={(row) => (
-            <div key={row.address} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13 }}>
-              <span style={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{row.label || fmtAddress(row.address)}</span>
-              <span style={{ color: INK(0.58), whiteSpace: 'nowrap' }}>{fmtUSD(row.volumeUSD)} · {fmtTx(row.txCount)} txns</span>
-            </div>
+            <ProportionRow
+              key={row.address}
+              label={row.label || fmtAddress(row.address)}
+              href={etherscanAddress(row.address)}
+              tone="neutral"
+              value={fmtUSD(row.volumeUSD)}
+              meta={`${fmtTx(row.txCount)}×`}
+              fraction={(row.volumeUSD || 0) / maxCpVol}
+            />
           )}
         />
       </div>
 
-      <RowList
+      <RankedList
         title="Related pools and contracts"
         rows={protocolRows}
         empty="No related protocol or contract activity available."
         renderRow={(row) => (
           <div key={row.protocolAddress || row.protocolName} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13 }}>
-            <span style={{ fontWeight: 700 }}>{row.protocolName}</span>
-            <span style={{ color: INK(0.58) }}>{fmtUSD(row.volumeUSD)} · {fmtTx(row.txCount)} txns</span>
+            <a href={etherscanAddress(row.protocolAddress)} target="_blank" rel="noreferrer" style={{ fontWeight: 700, color: INK(0.82), textDecoration: 'none' }}>{row.protocolName}</a>
+            <span style={{ color: INK(0.58), whiteSpace: 'nowrap' }}>{fmtUSD(row.volumeUSD)} · {fmtTx(row.txCount)} txns</span>
           </div>
         )}
       />
 
-      <RowList
+      <RankedList
         title="Last 20 transfers"
         rows={liveEvents}
         empty="No recent transfer data available."
         renderRow={(event) => (
-          <div key={event.txHash} style={{ display: 'grid', gridTemplateColumns: '110px minmax(0, 1fr) auto', gap: 12, alignItems: 'center', fontSize: 13 }}>
-            <span style={{ color: INK(0.46) }}>{formatDate(event.timestamp)}</span>
-            <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{event.counterpartyLabel || fmtAddress(event.counterpartyAddress || '')}</span>
-            <span style={{ color: INK(0.58), whiteSpace: 'nowrap' }}>{event.tokenSymbol || 'ETH'} · {fmtUSD(event.valueUSD)}</span>
+          <div key={event.txHash} style={{ display: 'grid', gridTemplateColumns: '90px minmax(0, 1fr) auto', gap: 12, alignItems: 'center', fontSize: 13 }}>
+            <span style={{ color: INK(0.46), fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{formatDate(event.timestamp)}</span>
+            <a href={etherscanAddress(event.counterpartyAddress)} target="_blank" rel="noreferrer" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: INK(0.78), textDecoration: 'none' }}>
+              {event.counterpartyLabel || fmtAddress(event.counterpartyAddress || '')}
+            </a>
+            <span style={{ color: INK(0.58), whiteSpace: 'nowrap' }}>{event.tokenSymbol || 'ETH'} · {fmtFlowUSD(event.valueUSD)}</span>
           </div>
         )}
       />
