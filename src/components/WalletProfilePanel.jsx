@@ -245,10 +245,21 @@ Identicon.propTypes = { address: PropTypes.string, size: PropTypes.number };
 
 // A single counterparty row with a proportional inline bar.
 function ProportionRow({ label, href, value, meta, fraction, tone }) {
+  const [hover, setHover] = useState(false);
   const accent = tone === 'in' ? INBOUND : tone === 'out' ? P : INK(0.4);
   const Label = href ? 'a' : 'span';
+  const rowTitle = meta ? `${label} — ${value} (${meta})` : `${label} — ${value}`;
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 10, alignItems: 'center' }}>
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      title={rowTitle}
+      style={{
+        display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 10, alignItems: 'center',
+        padding: '2px 4px', margin: '-2px -4px', borderRadius: 3,
+        background: hover ? 'rgba(30,26,20,0.035)' : 'transparent',
+        transition: 'background 0.12s ease',
+      }}>
       <div style={{ minWidth: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 4 }}>
           <Label
@@ -256,9 +267,9 @@ function ProportionRow({ label, href, value, meta, fraction, tone }) {
             target={href ? '_blank' : undefined}
             rel={href ? 'noreferrer' : undefined}
             style={{
-              fontSize: 12.5, fontWeight: 700, color: INK(0.82),
+              fontSize: 12.5, fontWeight: 700, color: hover && href ? P : INK(0.82),
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              textDecoration: 'none',
+              textDecoration: 'none', transition: 'color 0.12s ease',
             }}
             title={label}
           >
@@ -266,8 +277,8 @@ function ProportionRow({ label, href, value, meta, fraction, tone }) {
           </Label>
           <span style={{ fontSize: 12, color: INK(0.6), whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
         </div>
-        <div style={{ position: 'relative', height: 5, borderRadius: 3, background: 'rgba(30,26,20,0.06)', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', inset: 0, width: `${Math.max(3, Math.min(100, fraction * 100))}%`, background: accent, opacity: 0.62, borderRadius: 3 }} />
+        <div style={{ position: 'relative', height: 5, borderRadius: 3, background: 'rgba(30,26,20,0.06)', overflow: 'hidden', boxShadow: 'inset 0 0 0 1px rgba(30,26,20,0.06)' }}>
+          <div style={{ position: 'absolute', inset: 0, width: `${Math.max(3, Math.min(100, fraction * 100))}%`, background: accent, opacity: hover ? 0.92 : 0.62, borderRadius: 3, transition: 'opacity 0.12s ease' }} />
         </div>
       </div>
       {meta && <span style={{ fontSize: 10.5, color: INK(0.4), whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)' }}>{meta}</span>}

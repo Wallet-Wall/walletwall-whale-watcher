@@ -109,7 +109,11 @@ const DONUT_COLORS = ['#BF4E32', '#2F6F62', '#C9A47A', '#8B6D3E', '#5A3E26', 'rg
 
 // Hand-rolled SVG composition donut (no chart dependency, matches the
 // warm-paper aesthetic). Top 5 priced holdings + an aggregated "Other" slice.
+// Hovering a slice or its legend row cross-highlights the other and swaps the
+// centre readout to that slice's share — the one interaction, no extra chrome.
 function HoldingsDonut({ holdings, totalUsd }) {
+  const [active, setActive] = useState(null);
+
   const top = holdings.slice(0, 5).map(h => ({
     label: h.tokenSymbol || '—',
     value: Number.isFinite(h.balanceUsd) ? h.balanceUsd : 0,
@@ -119,33 +123,54 @@ function HoldingsDonut({ holdings, totalUsd }) {
   const total = segs.reduce((s, x) => s + x.value, 0) || 1;
 
   const r = 42;
+  const SW = 14;
   const C = 2 * Math.PI * r;
+  const GAP = 1.6; // ~1px paper gap between slices, matching the hairline design
   let offset = 0;
   const arcs = segs.map((s, i) => {
     const frac = s.value / total;
-    const dash = frac * C;
-    const arc = { ...s, frac, dash, offset, color: DONUT_COLORS[i % DONUT_COLORS.length] };
-    offset += dash;
+    const full = frac * C;
+    const arc = { ...s, frac, dash: Math.max(0.4, full - GAP), offset, color: DONUT_COLORS[i % DONUT_COLORS.length] };
+    offset += full;
     return arc;
   });
 
   return (
     <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
       <svg width={118} height={118} viewBox="0 0 120 120" role="img" aria-label="Holdings composition by value" style={{ flexShrink: 0 }}>
+        <circle cx={60} cy={60} r={r} fill="none" stroke={INK(0.07)} strokeWidth={SW + 2} />
         <g transform="rotate(-90 60 60)">
-          {arcs.map(a => (
+          {arcs.map((a, i) => (
             <circle key={a.label} cx={60} cy={60} r={r} fill="none"
-              stroke={a.color} strokeWidth={15}
-              strokeDasharray={`${a.dash} ${C - a.dash}`} strokeDashoffset={-a.offset} />
+              stroke={a.color}
+              strokeWidth={active === i ? SW + 3 : SW}
+              strokeOpacity={active === null || active === i ? 1 : 0.3}
+              strokeDasharray={`${a.dash} ${C - a.dash}`} strokeDashoffset={-a.offset}
+              style={{ transition: 'stroke-width 0.12s ease, stroke-opacity 0.12s ease' }}
+              onMouseEnter={() => setActive(i)} onMouseLeave={() => setActive(null)}>
+              <title>{`${a.label}: ${(a.frac * 100).toFixed(1)}% · ${fmtUSD(a.value)}`}</title>
+            </circle>
           ))}
         </g>
-        <text x={60} y={57} textAnchor="middle" style={{ fontSize: 15, fontWeight: 700, fill: INK(0.84), fontFamily: 'var(--font-display)' }}>{fmtUSD(totalUsd)}</text>
-        <text x={60} y={70} textAnchor="middle" style={{ fontSize: 8, letterSpacing: 1, fill: INK(0.4) }}>priced</text>
+        <text x={60} y={57} textAnchor="middle" style={{ fontSize: 15, fontWeight: 700, fill: INK(0.84), fontFamily: 'var(--font-display)' }}>
+          {active === null ? fmtUSD(totalUsd) : `${(arcs[active].frac * 100).toFixed(arcs[active].frac < 0.1 ? 1 : 0)}%`}
+        </text>
+        <text x={60} y={70} textAnchor="middle" style={{ fontSize: 8, letterSpacing: 1, fill: INK(0.4) }}>
+          {active === null ? 'priced' : arcs[active].label}
+        </text>
       </svg>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 120, flex: 1 }}>
-        {arcs.map(a => (
-          <div key={a.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-            <span style={{ width: 9, height: 9, borderRadius: 2, background: a.color, flexShrink: 0 }} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 120, flex: 1 }}>
+        {arcs.map((a, i) => (
+          <div key={a.label}
+            onMouseEnter={() => setActive(i)} onMouseLeave={() => setActive(null)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, fontSize: 12,
+              padding: '3px 6px', borderRadius: 3,
+              background: active === i ? 'rgba(191,78,50,0.06)' : 'transparent',
+              opacity: active === null || active === i ? 1 : 0.5,
+              transition: 'background 0.12s ease, opacity 0.12s ease',
+            }}>
+            <span style={{ width: 9, height: 9, borderRadius: 2, background: a.color, flexShrink: 0, border: `1px solid ${INK(0.12)}` }} />
             <span style={{ fontWeight: 700, color: INK(0.78), minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.label}</span>
             <span style={{ marginLeft: 'auto', color: INK(0.5), whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
               {(a.frac * 100).toFixed(a.frac < 0.1 ? 1 : 0)}% · {fmtUSD(a.value)}
