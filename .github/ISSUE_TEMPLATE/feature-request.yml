@@ -1,0 +1,49 @@
+name: Feature request
+description: Suggest a new feature or improvement
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feature requests are welcome. Please describe the problem you're trying to solve — a clear problem statement is more useful than a fully-formed solution.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What are you trying to do that you can't do today?
+      placeholder: "e.g. When reviewing an exchange wallet, there's no way to see net flow direction over the past 4 weeks without manually scanning each row."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you like this to work? Rough ideas are fine.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Have you tried working around this? What did you try?
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Wallet analysis / signals
+        - 12-week activity heatmap
+        - Quantum exposure
+        - Stable Seer integration
+        - AI narrative
+        - API / data layer
+        - UI / design
+        - Performance
+        - Documentation
+        - Other
+    validations:
+      required: true
