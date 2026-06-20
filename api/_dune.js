@@ -21,13 +21,15 @@
  *     On a cache miss it reads the latest Dune snapshot — it NEVER executes
  *     a query. The caller is responsible for filtering rows by wallet address.
  *
- * Admin / internal only (requires DUNE_ALLOW_EXECUTION=true)
+ * Admin / internal only — fail-closed multi-factor gate
  * ──────────────────────────────────────────────────────────
  *   executeAndPoll(queryId, params, opts)
  *     POSTs an execution request to Dune and polls until complete.
  *     Consumes execution credits. Must NOT be imported by public API routes.
- *     Only use in one-off scripts or admin tooling that run outside the
- *     public request path.
+ *     Blocked unless ALL of these hold (see _dune-execution-guard.js):
+ *       ALLOW_DUNE_EXECUTION=true, DUNE_EXECUTION_ACK=<ack phrase>,
+ *       DUNE_WRITE_API_KEY set, and NOT running in CI/tests.
+ *     Only a deliberate, one-off human action can satisfy all four.
  *
  * Redis key schema
  * ────────────────
@@ -37,11 +39,17 @@
 
 import { getRedisConfig } from './_ratelimit.js';
 import { recordProviderCall } from './_provider-telemetry.js';
+import { assertDuneExecutionAllowed } from './_dune-execution-guard.js';
 
 const DUNE_BASE = 'https://api.dune.com/api/v1';
 
-function getDuneKey() {
-  return process.env.DUNE_API_KEY || '';
+/**
+ * Read-only key for cache/read paths. Prefers the explicitly read-scoped
+ * DUNE_READONLY_API_KEY; falls back to the legacy DUNE_API_KEY. A write key
+ * (DUNE_WRITE_API_KEY) is NEVER used for reads.
+ */
+function getReadKey() {
+  return process.env.DUNE_READONLY_API_KEY || process.env.DUNE_API_KEY || '';
 }
 
 /** Stable, order-independent hash for a params object. */
@@ -120,8 +128,8 @@ async function cacheSetEx(key, ttlSeconds, value) {
  * @returns {Promise<{ rows: object[], queryRunAt: string|null }>}
  */
 export async function readLatestResults(queryId, { limit = 200 } = {}) {
-  const key = getDuneKey();
-  if (!key) throw new Error('DUNE_API_KEY not configured');
+  const key = getReadKey();
+  if (!key) throw new Error('Dune read key not configured (set DUNE_READONLY_API_KEY or DUNE_API_KEY)');
 
   const startedAt = Date.now();
   let r;
@@ -145,7 +153,8 @@ export async function readLatestResults(queryId, { limit = 200 } = {}) {
 
 /**
  * Execute a parameterized Dune query and poll until complete.
- * ADMIN / INTERNAL USE ONLY — requires DUNE_ALLOW_EXECUTION=true.
+ * ADMIN / INTERNAL USE ONLY — fail-closed behind assertDuneExecutionAllowed
+ * (ALLOW_DUNE_EXECUTION + DUNE_EXECUTION_ACK + DUNE_WRITE_API_KEY + not CI/test).
  * Must NOT be called from public API routes.
  * @param {string|number} queryId
  * @param {Record<string, string>} params   query_parameters passed to Dune
@@ -153,14 +162,15 @@ export async function readLatestResults(queryId, { limit = 200 } = {}) {
  * @returns {Promise<{ rows: object[], queryRunAt: string|null }>}
  */
 export async function executeAndPoll(queryId, params = {}, { timeoutMs = 25000 } = {}) {
-  if (process.env.DUNE_ALLOW_EXECUTION !== 'true') {
-    throw new Error(
-      'Dune query execution is disabled. ' +
-      'WalletWall uses a read-only Dune key — set DUNE_ALLOW_EXECUTION=true only in admin/internal scripts.'
-    );
-  }
-  const key = getDuneKey();
-  if (!key) throw new Error('DUNE_API_KEY not configured');
+  // Fail-closed multi-factor gate (see api/_dune-execution-guard.js):
+  // requires ALLOW_DUNE_EXECUTION=true + DUNE_EXECUTION_ACK ack phrase +
+  // a dedicated DUNE_WRITE_API_KEY + not running in CI/tests. No agent, CI
+  // job, script, or test can satisfy all four by accident.
+  assertDuneExecutionAllowed(process.env);
+
+  // Execution uses the dedicated WRITE key only — never the read key.
+  const key = process.env.DUNE_WRITE_API_KEY;
+  if (!key) throw new Error('DUNE_WRITE_API_KEY not configured');
 
   const headers = { 'x-dune-api-key': key, 'Content-Type': 'application/json' };
 

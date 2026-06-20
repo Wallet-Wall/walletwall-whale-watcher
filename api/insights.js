@@ -58,6 +58,20 @@ import { callAiProviders } from './_ai-providers.js';
 
 const INSIGHTS_CACHE_KEY = 'insights:v1:latest';
 const INSIGHTS_CACHE_TTL = 3600; // 1 hour — one AI + Dune hit per hour max
+const INSIGHTS_SINGLE_FLIGHT_KEY = INSIGHTS_CACHE_KEY;
+const pendingInsightGenerations = new Map();
+
+function coalesceInsightGeneration(key, load) {
+  if (pendingInsightGenerations.has(key)) return pendingInsightGenerations.get(key);
+
+  const pending = Promise.resolve()
+    .then(load)
+    .finally(() => {
+      if (pendingInsightGenerations.get(key) === pending) pendingInsightGenerations.delete(key);
+    });
+  pendingInsightGenerations.set(key, pending);
+  return pending;
+}
 
 // ── Redis helpers (thin wrappers; no dep on _ratelimit internals) ─────────
 
@@ -316,6 +330,7 @@ export default async function handler(req, res) {
     });
   }
 
+  const payload = await coalesceInsightGeneration(INSIGHTS_SINGLE_FLIGHT_KEY, async () => {
   // ── 2. Fetch Dune data in parallel (all read-only, no execution credits) ─
   const EMPTY = { rows: [], queryRunAt: null, fromCache: false, limit: null };
   const readSource = async (queryId, options) => {
@@ -406,5 +421,7 @@ export default async function handler(req, res) {
   };
 
   await redisCacheSetEx(INSIGHTS_CACHE_KEY, INSIGHTS_CACHE_TTL, JSON.stringify(payload));
+  return payload;
+  });
   return res.status(200).json(payload);
 }
