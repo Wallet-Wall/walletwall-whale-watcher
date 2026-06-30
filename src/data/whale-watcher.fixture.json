@@ -1,0 +1,118 @@
+{
+  "_note": "DEMO DATA ONLY — synthetic whale wallet activity fixture. All addresses are clearly fake demo labels, not real wallets. Values are illustrative only and must not be used for identity, attribution, or financial decisions.",
+  "as_of": "2024-01-15T00:00:00Z",
+  "network": "Ethereum (demo)",
+  "kpis": {
+    "tracked_wallets": 8,
+    "active_7d": 5,
+    "total_moved_usd_7d": 184000000,
+    "largest_spike_usd": 42000000,
+    "median_quantum_readiness": "Review"
+  },
+  "wallets": [
+    {
+      "rank": 1,
+      "label": "Demo Whale 001",
+      "type": "whale",
+      "address_demo": "0xDEMOWH01...AAAA",
+      "balance_usd": 1240000000,
+      "activity_7d": 38,
+      "largest_transfer_usd": 42000000,
+      "counterparties": 17,
+      "cadence_12w": [4, 6, 3, 8, 12, 9, 5, 7, 14, 11, 6, 38],
+      "quantum_status": "review",
+      "trend": "accumulating"
+    },
+    {
+      "rank": 2,
+      "label": "Demo Exchange Alpha",
+      "type": "exchange",
+      "address_demo": "0xDEMOEX01...BBBB",
+      "balance_usd": 980000000,
+      "activity_7d": 142,
+      "largest_transfer_usd": 31000000,
+      "counterparties": 1240,
+      "cadence_12w": [120, 134, 118, 150, 142, 129, 138, 144, 151, 133, 140, 142],
+      "quantum_status": "watch",
+      "trend": "distributing"
+    },
+    {
+      "rank": 3,
+      "label": "Demo Institution A",
+      "type": "institution",
+      "address_demo": "0xDEMOIN01...CCCC",
+      "balance_usd": 620000000,
+      "activity_7d": 4,
+      "largest_transfer_usd": 18000000,
+      "counterparties": 9,
+      "cadence_12w": [2, 1, 3, 2, 0, 1, 4, 2, 3, 1, 2, 4],
+      "quantum_status": "ok",
+      "trend": "accumulating"
+    },
+    {
+      "rank": 4,
+      "label": "Demo Whale 002",
+      "type": "whale",
+      "address_demo": "0xDEMOWH02...DDDD",
+      "balance_usd": 430000000,
+      "activity_7d": 21,
+      "largest_transfer_usd": 12000000,
+      "counterparties": 28,
+      "cadence_12w": [9, 11, 7, 13, 18, 22, 16, 14, 19, 23, 17, 21],
+      "quantum_status": "review",
+      "trend": "accumulating"
+    },
+    {
+      "rank": 5,
+      "label": "Demo Protocol X",
+      "type": "protocol",
+      "address_demo": "0xDEMOPR01...EEEE",
+      "balance_usd": 310000000,
+      "activity_7d": 67,
+      "largest_transfer_usd": 8000000,
+      "counterparties": 412,
+      "cadence_12w": [55, 61, 58, 70, 64, 59, 72, 66, 63, 68, 60, 67],
+      "quantum_status": "watch",
+      "trend": "distributing"
+    },
+    {
+      "rank": 6,
+      "label": "Demo Whale 003",
+      "type": "whale",
+      "address_demo": "0xDEMOWH03...FFFF",
+      "balance_usd": 215000000,
+      "activity_7d": 0,
+      "largest_transfer_usd": 0,
+      "counterparties": 6,
+      "cadence_12w": [12, 8, 5, 3, 2, 1, 0, 0, 1, 0, 0, 0],
+      "quantum_status": "ok",
+      "trend": "dormant"
+    },
+    {
+      "rank": 7,
+      "label": "Demo Exchange Beta",
+      "type": "exchange",
+      "address_demo": "0xDEMOEX02...0011",
+      "balance_usd": 140000000,
+      "activity_7d": 98,
+      "largest_transfer_usd": 6500000,
+      "counterparties": 870,
+      "cadence_12w": [88, 92, 85, 101, 96, 90, 99, 94, 91, 97, 89, 98],
+      "quantum_status": "watch",
+      "trend": "distributing"
+    },
+    {
+      "rank": 8,
+      "label": "Demo Institution B",
+      "type": "institution",
+      "address_demo": "0xDEMOIN02...2233",
+      "balance_usd": 96000000,
+      "activity_7d": 3,
+      "largest_transfer_usd": 4200000,
+      "counterparties": 5,
+      "cadence_12w": [1, 0, 2, 1, 1, 0, 2, 1, 0, 1, 2, 3],
+      "quantum_status": "ok",
+      "trend": "accumulating"
+    }
+  ]
+}

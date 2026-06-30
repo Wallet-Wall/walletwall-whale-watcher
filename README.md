@@ -1,121 +1,66 @@
 # Whale Watcher
 
-Whale Watcher is a read-only Ethereum wallet activity workspace. Enter any wallet address or ENS name to inspect movement patterns, 12-week activity cadence, large transfer spikes, counterparty relationships, and post-quantum exposure — all from a single focused surface.
+Whale Watcher is a read-only large-wallet activity lens. Browse a set of watched wallets and click any one to see its balance, 7-day activity, largest transfer, counterparties, accumulation/distribution trend, and a 12-week activity cadence — all from a single focused surface.
 
-Whale Watcher is part of the [WalletWall](https://walletwall.org) suite, hosted at [whales.walletwall.org](https://whales.walletwall.org).
+Whale Watcher is part of the [WalletWall](https://walletwall.org) analytics suite.
 
-> **No wallet connection required.** Whale Watcher never asks for private keys, seed phrases, or transaction signatures. All data is read-only from public on-chain sources.
+> **No wallet connection required.** Whale Watcher never asks for private keys, seed phrases, or transaction signatures. All data is read-only from static fixture data unless wired by the user to their own read-only source.
+
+## Disclaimers
+
+- **Demo data only.** All values are synthetic fixture data by default.
+- **No wallet connection.** This surface never connects to a wallet provider.
+- **No custody.** No funds are held, managed, or accessed.
+- **No signing.** No transaction construction or signing of any kind.
+- **No transactions.** No on-chain write operations.
+- **No paid Dune execution.** No live Dune query paths or paid analytics execution.
+- **No scoring engine.** No signal heuristics, scoring weights, or Dune queries — those live in the private WalletWall app.
+- **Not financial advice.** Nothing in this surface constitutes financial advice.
+- **Not production quantum protection.** No quantum-resistant vault claims.
 
 ## Tech Stack
 
-- React 19 + Vite 8
-- Recharts for activity charts
-- Node.js / Vercel serverless functions (`api/`)
-- [Dune Analytics](https://dune.com) for 12-week wallet activity
-- Etherscan + Alchemy for live wallet data
-- OpenRouter / OpenAI / Anthropic for optional AI narrative (first available wins)
-- Optional Upstash Redis for durable rate limiting
+- React 18 + Vite 6
+- Static fixture data (no live API dependencies, no backend)
+- Vitest + Testing Library for tests
 
 ## Local Development
 
 ```bash
 npm install
-cp .env.example .env
-```
-
-Open `.env` and set at least `SESSION_SECRET` to a random 32-character string. Generate one with:
-
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-
-Then start the dev servers:
-
-```bash
 npm run dev
 ```
 
-This starts:
-- Vite dev server on `http://localhost:3000`
-- API shim on `http://localhost:3001`
-
-The app falls back to demo wallet data when provider keys are not configured, so the UI is fully explorable with only `SESSION_SECRET` set.
-
-**Try it out:** enter `vitalik.eth` or `0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045` in the search box to see a fully-populated wallet view with live data.
-
-**Windows PowerShell:** use `npm.cmd` if `npm.ps1` is blocked by execution policy.
-
-## Environment Variables
-
-See [`.env.example`](.env.example) for the full list with inline documentation.
-
-| Variable | Required | Purpose |
-|---|---|---|
-| `SESSION_SECRET` | Local: recommended · Prod: required | Signs session JWTs — use 32+ random characters. Falls back to an ephemeral key in local dev only. |
-| `DUNE_API_KEY` | Recommended | 12-week wallet activity feed. Falls back to demo data. |
-| `DUNE_QUERY_12WK_ACTIVE_WALLETS` | Recommended | Numeric Dune query ID for the 12-week activity feed. |
-| `UPSTASH_REDIS_REST_URL` | Recommended | Durable rate limiting across restarts |
-| `UPSTASH_REDIS_REST_TOKEN` | Recommended | Durable rate limiting across restarts |
-| `ETHERSCAN_API_KEY` | Recommended | Live wallet transactions and balances |
-| `ALCHEMY_API_KEY` | Recommended | Live wallet data and ENS resolution |
-| `COINGECKO_API_KEY` | Optional | Token price data — unauthenticated CoinGecko used as fallback |
-| `GRAPH_API_KEY` | Optional | The Graph gateway key for Uniswap V3 / Aave V3 subgraph enrichment |
-| `GCP_SERVICE_ACCOUNT_JSON` | Optional | Service account JSON for BigQuery wallet activity (primary source for `/api/wallet-activity` when set) |
-| `OPENROUTER_API_KEY` | Optional | AI narrative (first available provider wins) |
-| `OPENAI_API_KEY` | Optional | AI narrative fallback |
-| `ANTHROPIC_API_KEY` | Optional | AI narrative fallback |
-
-### Dune Query Schema
-
-`DUNE_QUERY_12WK_ACTIVE_WALLETS` should return one row per wallet per active day with these columns:
-
-| Column | Type | Description |
-|---|---|---|
-| `address` | string | Wallet address (0x…) |
-| `label` | string | Optional label |
-| `category` | string | e.g. `exchange`, `defi`, `retail` |
-| `activity_tier` | string | e.g. `whale`, `active`, `dormant` |
-| `last_seen` | date | Most recent transaction date |
-| `tx_count_48h` | number | Transactions in last 48 hours |
-| `usd_volume_48h` | number | Volume (USD) in last 48 hours |
-| `activity_day` | date | Day for this row's activity bucket |
-| `tx_count_day` | number | Transactions on this day |
-| `usd_volume_day` | number | Volume (USD) on this day |
-| `intensity_score` | number | Normalized activity intensity (0–1) |
+This starts the Vite dev server at `http://localhost:5173`. The app runs entirely on static fixture data — no API keys or environment variables required.
 
 ## Commands
 
 ```bash
-npm run dev             # API + Vite dev server
+npm run dev             # Vite dev server
 npm run build           # Production build
-npm run test            # Node test suite
-npm run lint            # Static checks
+npm run test            # Run test suite
 npm run security:audit  # npm audit at moderate severity
-npm run check           # lint + test + build + audit
+npm run check           # test + build + audit
 ```
+
+## Replacing Fixture Data
+
+Whale Watcher ships with synthetic demo data in `src/data/whale-watcher.fixture.json`. To wire your own read-only data:
+
+1. Replace the fixture file contents with your data, matching the schema in `docs/DATA_FIXTURES.md`.
+2. Ensure your data source is read-only — no write access, no private keys.
+3. If connecting to a live API, build a server-side proxy that holds credentials outside this repository. Never commit API keys, Dune query IDs, or scoring logic here.
+
+See `docs/DATA_FIXTURES.md` for the full fixture schema and `docs/PUBLIC_SAFE_SCOPE.md` for what is intentionally out of scope.
 
 ## Contributing
 
-Contributions are welcome. Please:
-
-1. Fork and create a feature branch from `main`
-2. Keep changes focused — one issue or feature per PR
-3. Run `npm run check` before opening a PR
-4. Do not commit `.env` files or real API keys
-5. UI changes should use the existing cream/terracotta color palette
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for more detail.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Security
 
-- All provider API keys are server-side only — never sent to the frontend
-- Public wallet data (labels, ENS names, token metadata) is treated as attacker-controlled text
-- Session tokens are short-lived and IP-bound
-
-To report a security issue, open a GitHub Security Advisory or email security@walletwall.org.
+See [SECURITY.md](SECURITY.md). To report a vulnerability, open a GitHub Security Advisory or email security@walletwall.org.
 
 ## Data Attribution
 
-- On-chain data: Etherscan, Alchemy
-- Wallet activity feeds: [Dune Analytics](https://dune.com)
-- AI narrative: OpenRouter / OpenAI / Anthropic (optional)
+All fixture data is synthetic and for demonstration purposes only.
